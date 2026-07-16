@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TermuxHub - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Marked.js for rendering Markdown descriptions -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="container dashboard-container">
+        <div class="header">
+            <h1>📦 TermuxHub</h1>
+            <div>
+                <span class="user-info" id="userEmail"></span>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <input type="text" id="searchInput" class="search-bar" placeholder="🔍 Search software by name or description...">
+
+        <div id="softwareGrid" class="software-grid">
+            <p style="text-align: center; grid-column: 1/-1;">Loading software catalog...</p>
+        </div>
+    </div>
+
+    <!-- Modal for Software Details -->
+    <div id="softwareModal" class="modal">
+        <div class="modal-content">
+            <button class="close-modal" onclick="closeModal()">&times;</button>
+            <div id="modalBody" class="modal-body"></div>
+        </div>
+    </div>
+
+    <script>
+        const REPO = 'spacklight/termuxhub';
+        const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main/softwares/`;
+
+        // 1. Authentication Check
+        const user = localStorage.getItem('termuxhub_user');
+        if (!user) {
+            window.location.href = 'login.html';
+        } else {
+            document.getElementById('userEmail').textContent = `Welcome, ${user}`;
+        }
+
+        function logout() {
+            localStorage.removeItem('termuxhub_user');
+            window.location.href = 'login.html';
+                }
+
+        let allSoftware = [];
+
+        // 2. Fetch Software List from GitHub API
+        async function loadSoftware() {
+            try {
+                const response = await fetch(`https://api.github.com/repos/${REPO}/contents/softwares`);
+                const files = await response.json();
+                
+                // Filter only .md files (our description files)
+                const mdFiles = files.filter(file => file.name.endsWith('.md'));
+                
+                // Fetch the content of each .md file
+                allSoftware = await Promise.all(mdFiles.map(async (file) => {
+                    const contentResponse = await fetch(file.download_url);
+                    const content = await contentResponse.text();
+                    
+                    // Extract a short preview (first 100 chars of the description)
+                    const preview = content.replace(/#/g, '').substring(0, 120) + '...';
+                    
+                    // Extract the base name (e.g., "file_organizer" from "file_organizer.md")
+                    const name = file.name.replace('.md', '').replace(/_/g, ' ');
+                    
+                    return {
+                        name: name,
+                        filename: file.name,
+                        downloadUrl: file.download_url, // The raw .md file
+                        scriptUrl: RAW_BASE + file.name.replace('.md', '.py'), // Guess the .py file URL
+                        preview: preview,
+                        fullContent: content
+                    };
+                }));
+                
+                renderSoftware(allSoftware);
+            } catch (error) {
+                document.getElementById('softwareGrid').innerHTML = 
+                    `<p style="color: var(--error-color); text-align: center; grid-column: 1/-1;">
+                        Error loading software. Make sure the 'softwares' folder exists in your GitHub repo.
+                    </p>`;
+                console.error(error);
+            }
+        }
+
+        // 3. Render the Software Cards
+        function renderSoftware(softwareList) {
+            const grid = document.getElementById('softwareGrid');
+            grid.innerHTML = '';
+            
+            if (softwareList.length === 0) {
+                grid.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">No software found matching your search.</p>';
+                return;
+            }
+            
+            softwareList.forEach(sw => {
+                const card = document.createElement('div');
+                card.className = 'software-card';
+                card.innerHTML = `
+                    <h3>${sw.name}</h3>
+                    <p>${sw.preview}</p>
+                    <button class="view-btn" onclick="openModal('${sw.filename}')">View Details & Download</button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // 4. Search Functionality
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = allSoftware.filter(sw => 
+                sw.name.toLowerCase().includes(query) || 
+                sw.fullContent.toLowerCase().includes(query)
+            );
+            renderSoftware(filtered);
+        });
+
+        // 5. Modal Functions
+        function openModal(filename) {
+            const sw = allSoftware.find(s => s.filename === filename);
+            if (!sw) return;
+            
+            // Convert Markdown to HTML using marked.js
+            const htmlContent = marked.parse(sw.fullContent);
+            
+            // Add a dynamic download command block
+            const downloadCommand = `curl -O ${sw.scriptUrl}\nchmod +x ${sw.filename.replace('.md', '.py')}\npython ${sw.filename.replace('.md', '.py')}`;
+            
+            const finalHtml = `
+                ${htmlContent}
+                <hr style="border-color: #45475a; margin: 2rem 0;">
+                <h3>⚡ Quick Install Command</h3>
+                <p>Copy and paste this entire block into Termux:</p>
+                <pre><code>${downloadCommand}</code></pre>
+                <button class="copy-btn" onclick="copyToClipboard('${downloadCommand}')">📋 Copy Command</button>
+            `;
+            
+            document.getElementById('modalBody').innerHTML = finalHtml;
+            document.getElementById('softwareModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('softwareModal').classList.remove('active');
+        }
+
+        // Close modal if clicking outside the content
+        document.getElementById('softwareModal').addEventListener('click', (e) => {
+            if (e.target.id === 'softwareModal') closeModal();
+        });
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Command copied to clipboard!');
+            });
+        }
+
+        // Initialize
+        loadSoftware();
+    </script>
+</body>
+</html>
