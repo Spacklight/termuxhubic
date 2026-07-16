@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TermuxHub - Dashboard</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Marked.js for rendering Markdown descriptions -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -48,7 +47,7 @@
         function logout() {
             localStorage.removeItem('termuxhub_user');
             window.location.href = 'login.html';
-                }
+        }
 
         let allSoftware = [];
 
@@ -61,12 +60,18 @@
                 // Filter only .md files (our description files)
                 const mdFiles = files.filter(file => file.name.endsWith('.md'));
                 
+                if (mdFiles.length === 0) {
+                    document.getElementById('softwareGrid').innerHTML = 
+                        '<p style="text-align: center; grid-column: 1/-1;">No software available yet. Check back soon!</p>';
+                    return;
+                }
+                
                 // Fetch the content of each .md file
                 allSoftware = await Promise.all(mdFiles.map(async (file) => {
                     const contentResponse = await fetch(file.download_url);
                     const content = await contentResponse.text();
                     
-                    // Extract a short preview (first 100 chars of the description)
+                    // Extract a short preview (first 120 chars)
                     const preview = content.replace(/#/g, '').substring(0, 120) + '...';
                     
                     // Extract the base name (e.g., "file_organizer" from "file_organizer.md")
@@ -75,8 +80,8 @@
                     return {
                         name: name,
                         filename: file.name,
-                        downloadUrl: file.download_url, // The raw .md file
-                        scriptUrl: RAW_BASE + file.name.replace('.md', '.py'), // Guess the .py file URL
+                        downloadUrl: file.download_url,
+                        scriptUrl: RAW_BASE + file.name.replace('.md', '.py'),
                         preview: preview,
                         fullContent: content
                     };
@@ -133,7 +138,8 @@
             const htmlContent = marked.parse(sw.fullContent);
             
             // Add a dynamic download command block
-            const downloadCommand = `curl -O ${sw.scriptUrl}\nchmod +x ${sw.filename.replace('.md', '.py')}\npython ${sw.filename.replace('.md', '.py')}`;
+            const scriptName = sw.filename.replace('.md', '.py');
+            const downloadCommand = `curl -O ${sw.scriptUrl}\nchmod +x ${scriptName}\npython ${scriptName}`;
             
             const finalHtml = `
                 ${htmlContent}
@@ -141,7 +147,7 @@
                 <h3>⚡ Quick Install Command</h3>
                 <p>Copy and paste this entire block into Termux:</p>
                 <pre><code>${downloadCommand}</code></pre>
-                <button class="copy-btn" onclick="copyToClipboard('${downloadCommand}')">📋 Copy Command</button>
+                <button class="copy-btn" onclick="copyToClipboard(\`${downloadCommand}\`)">📋 Copy Command</button>
             `;
             
             document.getElementById('modalBody').innerHTML = finalHtml;
