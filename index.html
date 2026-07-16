@@ -36,20 +36,9 @@
         const REPO = 'spacklight/termuxhubic';
         const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main/softwares/`;
 
-        // 1. Authentication Check
-        const user = localStorage.getItem('termuxhubic_user');
-        if (!user) {
-            window.location.href = 'login.html';
-        } else {
-            document.getElementById('userEmail').textContent = `Welcome, ${user}`;
-        }
 
-        function logout() {
-            localStorage.removeItem('termuxhub_user');
-            window.location.href = 'login.html';
-        }
 
-        let allSoftware = [];
+    
 
         // 2. Fetch Software List from GitHub API
         async function loadSoftware() {
